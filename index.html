@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Summarizer Tool</title>
+    <title>Color Summarizer Tool v3</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         textarea, select, input { width: 100%; margin-bottom: 10px; }
@@ -12,8 +12,8 @@
     </style>
 </head>
 <body>
-    <h1>Color Summarizer Tool (uses the Image Color Summarizer API, by Martin Krzywinski, https://mk.bcgsc.ca/color-summarizer/?api)</h1>
-    <textarea id="imageUrl" rows="3" placeholder="Enter image URL here"></textarea>
+    <h1>Color Summarizer Tool v3</h1>
+    <textarea id="imageUrl" rows="3" placeholder="Enter image URL here (one per line)"></textarea>
     <select id="precision">
         <option value="vlow">Very Low (50px)</option>
         <option value="low">Low (75px)</option>
@@ -39,13 +39,13 @@
     </select>
     <label><input type="checkbox" id="includeHistogram"> Include Histogram</label>
     <label><input type="checkbox" id="includePixel"> Include Pixel Data</label>
-    <button onclick="analyzeImage()">Analyze Image</button>
+    <button onclick="analyzeImages()">Analyze Images</button>
     <div id="results"></div>
     <div id="debug"></div>
 
     <script>
-        async function analyzeImage() {
-            const imageUrl = document.getElementById('imageUrl').value.trim();
+        async function analyzeImages() {
+            const imageUrls = document.getElementById('imageUrl').value.trim().split('\n');
             const precision = document.getElementById('precision').value;
             const numClusters = document.getElementById('numClusters').value;
             const outputFormat = document.getElementById('outputFormat').value;
@@ -57,32 +57,37 @@
             resultsDiv.innerHTML = 'Analyzing...';
             debugDiv.innerHTML = '';
 
-            const apiUrl = 'https://mkweb.bcgsc.ca/color-summarizer/';
-            const params = new URLSearchParams({
-                url: imageUrl,
-                precision: precision,
-                num_clusters: numClusters,
-                [outputFormat]: '1',
-                histogram: includeHistogram ? '1' : '0',
-                pixel: includePixel ? '1' : '0'
-            });
-
-            const fullUrl = `${apiUrl}?${params}`;
-            debugDiv.innerHTML += `Requesting: ${fullUrl}\n\n`;
-
             try {
-                const response = await fetch(fullUrl);
-                const data = await (outputFormat === 'json' ? response.json() : response.text());
+                const response = await fetch('/.netlify/functions/color-summarizer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        imageUrls,
+                        precision,
+                        numClusters,
+                        outputFormat,
+                        includeHistogram,
+                        includePixel
+                    }),
+                });
+
+                const data = await response.json();
                 debugDiv.innerHTML += `Response status: ${response.status}\n\n`;
                 
                 if (response.ok) {
-                    if (outputFormat === 'html') {
-                        resultsDiv.innerHTML = data;
-                    } else {
-                        resultsDiv.textContent = typeof data === 'object' ? JSON.stringify(data, null, 2) : data;
-                    }
+                    resultsDiv.innerHTML = '';
+                    data.forEach((result, index) => {
+                        resultsDiv.innerHTML += `<h3>Image ${index + 1}</h3>`;
+                        if (outputFormat === 'html') {
+                            resultsDiv.innerHTML += result;
+                        } else {
+                            resultsDiv.innerHTML += `<pre>${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}</pre>`;
+                        }
+                    });
                 } else {
-                    resultsDiv.textContent = `Error: ${response.statusText}`;
+                    resultsDiv.textContent = `Error: ${data.error || response.statusText}`;
                 }
             } catch (error) {
                 console.error('Error details:', error);
