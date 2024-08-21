@@ -3,16 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Summarizer Tool (CORS Proxy)</title>
+    <title>Color Summarizer Tool (TSV Download)</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         textarea, select, input { width: 100%; margin-bottom: 10px; }
         button { margin-top: 10px; }
-        #results, #debug { margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+        #debug { margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
     </style>
 </head>
 <body>
-    <h1>Color Summarizer Tool (uses the Image Color Summarizer API, by Martin Krzywinski, https://mk.bcgsc.ca/color-summarizer/?api)</h1>
+    <h1>Color Summarizer Tool (credit: uses the Image Color Summarizer API, by Martin Krzywinski, <a href="https://mk.bcgsc.ca/color-summarizer/?api”</a>)</h1>
     <p>Note: You may need to <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">request temporary access</a> to the CORS Anywhere demo server before using this tool.</p>
     <textarea id="imageUrl" rows="3" placeholder="Enter image URL here (one per line)"></textarea>
     <select id="precision">
@@ -32,16 +32,9 @@
         <option value="15">15 clusters</option>
         <option value="20">20 clusters</option>
     </select>
-    <select id="outputFormat">
-        <option value="text">Plain Text</option>
-        <option value="json" selected>JSON</option>
-        <option value="xml">XML</option>
-        <option value="html">HTML</option>
-    </select>
     <label><input type="checkbox" id="includeHistogram"> Include Histogram</label>
     <label><input type="checkbox" id="includePixel"> Include Pixel Data</label>
-    <button onclick="analyzeImages()">Analyze Images</button>
-    <div id="results"></div>
+    <button onclick="analyzeImages()">Analyze Images and Download TSV</button>
     <div id="debug"></div>
 
     <script>
@@ -52,25 +45,20 @@
             const imageUrls = document.getElementById('imageUrl').value.trim().split('\n');
             const precision = document.getElementById('precision').value;
             const numClusters = document.getElementById('numClusters').value;
-            const outputFormat = document.getElementById('outputFormat').value;
             const includeHistogram = document.getElementById('includeHistogram').checked;
             const includePixel = document.getElementById('includePixel').checked;
 
-            const resultsDiv = document.getElementById('results');
             const debugDiv = document.getElementById('debug');
-            resultsDiv.innerHTML = 'Analyzing...';
-            debugDiv.innerHTML = '';
+            debugDiv.innerHTML = 'Analyzing...';
 
             try {
-                const results = await Promise.all(imageUrls.map(analyzeImage));
-                resultsDiv.innerHTML = results.map((result, index) => `
-                    <h3>Image ${index + 1}</h3>
-                    <pre>${result}</pre>
-                `).join('');
+                const results = await Promise.all(imageUrls.map(url => analyzeImage(url)));
+                const tsvContent = generateTSV(results);
+                downloadTSV(tsvContent, 'color_summary.tsv');
+                debugDiv.innerHTML = 'Analysis complete. TSV file downloaded.';
             } catch (error) {
                 console.error('Error details:', error);
-                resultsDiv.textContent = `Error: ${error.message}`;
-                debugDiv.innerHTML += `Error details: ${error}\n\n`;
+                debugDiv.innerHTML = `Error: ${error.message}`;
             }
         }
 
@@ -79,7 +67,8 @@
                 url: imageUrl,
                 precision: document.getElementById('precision').value,
                 num_clusters: document.getElementById('numClusters').value,
-                [document.getElementById('outputFormat').value]: '1',
+                text: '1',
+                tab: '1',
                 histogram: document.getElementById('includeHistogram').checked ? '1' : '0',
                 pixel: document.getElementById('includePixel').checked ? '1' : '0'
             });
@@ -92,12 +81,28 @@
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
             
-            const contentType = response.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-                return JSON.stringify(await response.json(), null, 2);
-            } else {
-                return await response.text();
-            }
+            return await response.text();
+        }
+
+        function generateTSV(results) {
+            return results.map((result, index) => {
+                const lines = result.split('\n');
+                const headerLine = index === 0 ? 'Image URL\t' + lines[0] + '\n' : '';
+                const dataLines = lines.slice(1).map(line => `${results[index]}\t${line}`).join('\n');
+                return headerLine + dataLines;
+            }).join('\n');
+        }
+
+        function downloadTSV(content, fileName) {
+            const blob = new Blob([content], { type: 'text/tab-separated-values' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
     </script>
 </body>
