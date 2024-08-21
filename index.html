@@ -3,17 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Summarizer Tool (TSV Download)</title>
+    <title>Color Summarizer Tool (Single TSV Download)</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         textarea, select, input { width: 100%; margin-bottom: 10px; }
         button { margin-top: 10px; }
-        #debug { margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
+        #debug, #results { margin-top: 20px; white-space: pre-wrap; font-family: monospace; }
     </style>
 </head>
 <body>
-    <h1>Color Summarizer Tool (credit: uses the Image Color Summarizer API, by Martin Krzywinski, https://mk.bcgsc.ca/color-summarizer/?api)</h1>
-    
+    <h1>Color Summarizer Tool (credit: uses the Image Color Summarizer API, by Martin Krzywinski, <a href="https://mk.bcgsc.ca/color-summarizer/?api”</a>)</h1>
+
     <p>Note: You may need to <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">request temporary access</a> to the CORS Anywhere demo server before using this tool.</p>
     <textarea id="imageUrl" rows="3" placeholder="Enter image URL here (one per line)"></textarea>
     <select id="precision">
@@ -35,8 +35,9 @@
     </select>
     <label><input type="checkbox" id="includeHistogram"> Include Histogram</label>
     <label><input type="checkbox" id="includePixel"> Include Pixel Data</label>
-    <button onclick="analyzeImages()">Analyze Images and Download TSV</button>
+    <button onclick="analyzeImages()">Analyze Images and Download TSV file</button>
     <div id="debug"></div>
+    <div id="results"></div>
 
     <script>
         const corsProxy = 'https://cors-anywhere.herokuapp.com/';
@@ -44,22 +45,33 @@
 
         async function analyzeImages() {
             const imageUrls = document.getElementById('imageUrl').value.trim().split('\n');
-            const precision = document.getElementById('precision').value;
-            const numClusters = document.getElementById('numClusters').value;
-            const includeHistogram = document.getElementById('includeHistogram').checked;
-            const includePixel = document.getElementById('includePixel').checked;
-
             const debugDiv = document.getElementById('debug');
+            const resultsDiv = document.getElementById('results');
             debugDiv.innerHTML = 'Analyzing...';
+            resultsDiv.innerHTML = '';
 
-            try {
-                const results = await Promise.all(imageUrls.map(url => analyzeImage(url)));
-                const tsvContent = generateTSV(results);
-                downloadTSV(tsvContent, 'color_summary.tsv');
+            const blobParts = [];
+            let isFirstImage = true;
+
+            for (let i = 0; i < imageUrls.length; i++) {
+                try {
+                    const result = await analyzeImage(imageUrls[i]);
+                    const processedResult = processResult(result, imageUrls[i], isFirstImage);
+                    blobParts.push(processedResult);
+                    resultsDiv.innerHTML += `Analyzed: ${imageUrls[i]}<br>`;
+                    isFirstImage = false;
+                } catch (error) {
+                    console.error('Error details:', error);
+                    resultsDiv.innerHTML += `Error analyzing ${imageUrls[i]}: ${error.message}<br>`;
+                }
+            }
+
+            if (blobParts.length > 0) {
+                const blob = new Blob(blobParts, { type: 'text/tab-separated-values' });
+                downloadTSV(blob, 'color_summary_all.tsv');
                 debugDiv.innerHTML = 'Analysis complete. TSV file downloaded.';
-            } catch (error) {
-                console.error('Error details:', error);
-                debugDiv.innerHTML = `Error: ${error.message}`;
+            } else {
+                debugDiv.innerHTML = 'No successful analyses to download.';
             }
         }
 
@@ -85,17 +97,19 @@
             return await response.text();
         }
 
-        function generateTSV(results) {
-            return results.map((result, index) => {
-                const lines = result.split('\n');
-                const headerLine = index === 0 ? 'Image URL\t' + lines[0] + '\n' : '';
-                const dataLines = lines.slice(1).map(line => `${results[index]}\t${line}`).join('\n');
-                return headerLine + dataLines;
-            }).join('\n');
+        function processResult(result, imageUrl, isFirstImage) {
+            const lines = result.split('\n');
+            let output = '';
+
+            if (isFirstImage) {
+                output += 'Image URL\t' + lines[0] + '\n';
+            }
+
+            output += lines.slice(1).map(line => `${imageUrl}\t${line}`).join('\n') + '\n';
+            return output;
         }
 
-        function downloadTSV(content, fileName) {
-            const blob = new Blob([content], { type: 'text/tab-separated-values' });
+        function downloadTSV(blob, fileName) {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -108,3 +122,4 @@
     </script>
 </body>
 </html>
+
