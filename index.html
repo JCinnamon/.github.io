@@ -3,10 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GitHub Pages Test</title>
+    <title>Color Summarizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        textarea { width: 100%; height: 100px; }
+        button { margin-top: 10px; }
+        #results { margin-top: 20px; }
+    </style>
 </head>
 <body>
-    <h1>Hello, GitHub Pages!</h1>
-    <p>If you can see this, your GitHub Pages is working correctly.</p>
+    <h1>Color Summarizer</h1>
+    <p>Enter image URLs (one per line) to analyze:</p>
+    <textarea id="imageUrls" placeholder="https://example.com/image1.jpg
+https://example.com/image2.jpg"></textarea>
+    <br>
+    <button onclick="analyzeImages()">Analyze Images</button>
+    <div id="results"></div>
+
+    <script>
+        async function analyzeImages() {
+            const imageUrls = document.getElementById('imageUrls').value.split('\n').filter(url => url.trim() !== '');
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = 'Analyzing...';
+
+            try {
+                const results = await Promise.all(imageUrls.map(analyzeImage));
+                resultsDiv.innerHTML = results.map((result, index) => `
+                    <h3>Image ${index + 1}</h3>
+                    <p>URL: ${imageUrls[index]}</p>
+                    <p>Colors: ${result.join(', ')}</p>
+                `).join('');
+            } catch (error) {
+                resultsDiv.innerHTML = `Error: ${error.message}`;
+            }
+        }
+
+        async function analyzeImage(imageUrl) {
+            const apiUrl = 'https://mk.bcgsc.ca/color-summarizer/api/json';
+            const params = new URLSearchParams({ image: imageUrl });
+            const response = await axios.get(`${apiUrl}?${params}`);
+            return response.data.colors.map(color => color.hex);
+        }
+    </script>
 </body>
 </html>
