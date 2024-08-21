@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Color Summarizer Tool v3</title>
+    <title>Color Summarizer Tool (CORS Proxy)</title>
     <style>
         body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
         textarea, select, input { width: 100%; margin-bottom: 10px; }
@@ -12,7 +12,8 @@
     </style>
 </head>
 <body>
-    <h1>Color Summarizer Tool v3</h1>
+    <h1>Color Summarizer Tool (uses the Image Color Summarizer API, by Martin Krzywinski, https://mk.bcgsc.ca/color-summarizer/?api)</h1>
+    <p>Note: You may need to <a href="https://cors-anywhere.herokuapp.com/corsdemo" target="_blank">request temporary access</a> to the CORS Anywhere demo server before using this tool.</p>
     <textarea id="imageUrl" rows="3" placeholder="Enter image URL here (one per line)"></textarea>
     <select id="precision">
         <option value="vlow">Very Low (50px)</option>
@@ -44,6 +45,9 @@
     <div id="debug"></div>
 
     <script>
+        const corsProxy = 'https://cors-anywhere.herokuapp.com/';
+        const apiUrl = 'https://mkweb.bcgsc.ca/color-summarizer/';
+
         async function analyzeImages() {
             const imageUrls = document.getElementById('imageUrl').value.trim().split('\n');
             const precision = document.getElementById('precision').value;
@@ -58,41 +62,41 @@
             debugDiv.innerHTML = '';
 
             try {
-                const response = await fetch('/.netlify/functions/color-summarizer', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        imageUrls,
-                        precision,
-                        numClusters,
-                        outputFormat,
-                        includeHistogram,
-                        includePixel
-                    }),
-                });
-
-                const data = await response.json();
-                debugDiv.innerHTML += `Response status: ${response.status}\n\n`;
-                
-                if (response.ok) {
-                    resultsDiv.innerHTML = '';
-                    data.forEach((result, index) => {
-                        resultsDiv.innerHTML += `<h3>Image ${index + 1}</h3>`;
-                        if (outputFormat === 'html') {
-                            resultsDiv.innerHTML += result;
-                        } else {
-                            resultsDiv.innerHTML += `<pre>${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}</pre>`;
-                        }
-                    });
-                } else {
-                    resultsDiv.textContent = `Error: ${data.error || response.statusText}`;
-                }
+                const results = await Promise.all(imageUrls.map(analyzeImage));
+                resultsDiv.innerHTML = results.map((result, index) => `
+                    <h3>Image ${index + 1}</h3>
+                    <pre>${result}</pre>
+                `).join('');
             } catch (error) {
                 console.error('Error details:', error);
                 resultsDiv.textContent = `Error: ${error.message}`;
                 debugDiv.innerHTML += `Error details: ${error}\n\n`;
+            }
+        }
+
+        async function analyzeImage(imageUrl) {
+            const params = new URLSearchParams({
+                url: imageUrl,
+                precision: document.getElementById('precision').value,
+                num_clusters: document.getElementById('numClusters').value,
+                [document.getElementById('outputFormat').value]: '1',
+                histogram: document.getElementById('includeHistogram').checked ? '1' : '0',
+                pixel: document.getElementById('includePixel').checked ? '1' : '0'
+            });
+
+            const fullUrl = `${corsProxy}${apiUrl}?${params}`;
+            document.getElementById('debug').innerHTML += `Requesting: ${fullUrl}\n\n`;
+
+            const response = await fetch(fullUrl);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+                return JSON.stringify(await response.json(), null, 2);
+            } else {
+                return await response.text();
             }
         }
     </script>
