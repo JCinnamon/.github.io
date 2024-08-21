@@ -13,7 +13,7 @@
     </style>
 </head>
 <body>
-    <h1>Color Summarizer</h1>
+    <h1>Image Color Summarizer automator (credit: Image Color Summarizer API, by Martin Krzywinski)</h1>
     <p>Enter image URLs (one per line) to analyze:</p>
     <textarea id="imageUrls" placeholder="https://example.com/image1.jpg
 https://example.com/image2.jpg"></textarea>
@@ -41,9 +41,15 @@ https://example.com/image2.jpg"></textarea>
 
         async function analyzeImage(imageUrl) {
             const apiUrl = 'https://mk.bcgsc.ca/color-summarizer/api/json';
+            const corsProxy = 'https://cors-anywhere.herokuapp.com/';
             const params = new URLSearchParams({ image: imageUrl });
-            const response = await axios.get(`${apiUrl}?${params}`);
-            return response.data.colors.map(color => color.hex);
+            try {
+                const response = await axios.get(`${corsProxy}${apiUrl}?${params}`);
+                return response.data.colors.map(color => color.hex);
+            } catch (error) {
+                console.error('Error details:', error.response || error);
+                throw new Error(`Failed to analyze image: ${error.message}`);
+            }
         }
     </script>
 </body>
